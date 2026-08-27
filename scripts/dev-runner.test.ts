@@ -63,6 +63,7 @@ const devServerInput = {
   mode: "dev:server",
   t3Home: "/tmp/t3code-dev-runner",
   browser: undefined,
+  serverWatch: undefined,
   autoBootstrapProjectFromCwd: undefined,
   logWebSocketEvents: undefined,
   host: undefined,
@@ -816,6 +817,30 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
   });
 
   describe("runDevRunnerWithInput", () => {
+    it.effect("passes the server watch opt-out to the spawned tasks", () => {
+      let capturedEnv: Record<string, string | undefined> | undefined;
+      const spawnerLayer = Layer.succeed(
+        ChildProcessSpawner.ChildProcessSpawner,
+        ChildProcessSpawner.make((command) => {
+          capturedEnv = (
+            command as unknown as {
+              readonly options?: { readonly env?: Record<string, string | undefined> };
+            }
+          ).options?.env;
+          return Effect.succeed(mockProcess(0));
+        }),
+      );
+
+      return Effect.gen(function* () {
+        yield* runDevRunnerWithInput({ ...devServerInput, serverWatch: false }).pipe(
+          Effect.provide(Layer.mergeAll(emptyConfigLayer, netServiceLayer, spawnerLayer)),
+          Effect.provideService(HostProcessPlatform, "linux"),
+        );
+
+        assert.equal(capturedEnv?.T3CODE_DEV_SERVER_WATCH, "0");
+      });
+    });
+
     it.effect("preserves invalid configuration as the exact cause", () =>
       Effect.gen(function* () {
         const error = yield* runDevRunnerWithInput({ ...devServerInput, dryRun: true }).pipe(

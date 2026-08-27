@@ -297,6 +297,7 @@ interface CreateDevRunnerEnvInput {
   readonly webOffset: number;
   readonly t3Home: string | undefined;
   readonly browser: boolean | undefined;
+  readonly serverWatch?: boolean | undefined;
   readonly autoBootstrapProjectFromCwd: boolean | undefined;
   readonly logWebSocketEvents: boolean | undefined;
   readonly host: string | undefined;
@@ -311,6 +312,7 @@ export function createDevRunnerEnv({
   webOffset,
   t3Home,
   browser,
+  serverWatch,
   autoBootstrapProjectFromCwd,
   logWebSocketEvents,
   host,
@@ -329,6 +331,7 @@ export function createDevRunnerEnv({
     const output: NodeJS.ProcessEnv = {
       ...baseEnv,
       PORT: String(webPort),
+      T3CODE_DEV_SERVER_WATCH: serverWatch === false ? "0" : "1",
       VITE_DEV_SERVER_URL:
         devUrl?.toString() ??
         `http://${isDesktopMode ? DESKTOP_DEV_LOOPBACK_HOST : "localhost"}:${webPort}`,
@@ -620,6 +623,7 @@ interface DevRunnerCliInput {
   readonly mode: DevMode;
   readonly t3Home: string | undefined;
   readonly browser: boolean | undefined;
+  readonly serverWatch?: boolean | undefined;
   readonly autoBootstrapProjectFromCwd: boolean | undefined;
   readonly logWebSocketEvents: boolean | undefined;
   readonly host: string | undefined;
@@ -692,6 +696,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
       webOffset,
       t3Home: resolvedT3Home,
       browser: input.browser,
+      serverWatch: input.serverWatch,
       autoBootstrapProjectFromCwd: input.autoBootstrapProjectFromCwd,
       logWebSocketEvents: input.logWebSocketEvents,
       host: input.host,
@@ -867,6 +872,12 @@ const devRunnerCli = Command.make("dev-runner", {
   ),
   browser: Flag.boolean("browser").pipe(
     Flag.withDescription("Open a browser automatically (disabled by default for web dev)."),
+  ),
+  serverWatch: Flag.boolean("server-watch").pipe(
+    Flag.withDescription(
+      "Restart the development server when source files change (equivalent to T3CODE_DEV_SERVER_WATCH).",
+    ),
+    Flag.withFallbackConfig(optionalBooleanConfig("T3CODE_DEV_SERVER_WATCH")),
   ),
   autoBootstrapProjectFromCwd: Flag.boolean("auto-bootstrap-project-from-cwd").pipe(
     Flag.withDescription(

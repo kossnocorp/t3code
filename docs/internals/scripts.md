@@ -30,6 +30,9 @@ authenticated.
 - `vp run dev --browser`: Auto-opens a browser. Off by default. The dev runner writes
   `T3CODE_NO_BROWSER` itself from this flag, so setting `T3CODE_NO_BROWSER=0` in your environment has
   no effect; use `--browser`.
+- `vp run dev --no-server-watch`: Runs the server once instead of restarting it after source
+  changes. `T3CODE_DEV_SERVER_WATCH=0` is the environment equivalent, which is useful when a process
+  supervisor should restart the entire dev stack after a server failure.
 - `vp run dev:server`: Starts just the server. It runs on Node (`node --watch src/bin.ts`), so
   without Bun present it selects `NodePtyAdapter` and `NodeHttpServer`.
 - `vp run dev:web`: Starts just the Vite dev server for the web app.
