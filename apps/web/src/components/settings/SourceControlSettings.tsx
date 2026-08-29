@@ -1,21 +1,20 @@
-import { ChevronDownIcon, GitPullRequestIcon, RefreshCwIcon } from "lucide-react";
-import * as Duration from "effect/Duration";
-import * as Option from "effect/Option";
-import { useState, type ReactNode } from "react";
 import type {
   BackgroundActivitySettings,
-  SourceControlProviderKind,
   SourceControlDiscoveryResult,
   SourceControlProviderAuth,
   SourceControlProviderDiscoveryItem,
-  VcsDriverKind,
   VcsDiscoveryItem,
+  WorktreeManagerDiscoveryItem,
 } from "@t3tools/contracts";
 import {
   getBackgroundActivityBaseProfile,
   getBackgroundActivityPresetSettings,
   resolveServerBackgroundActivitySettings,
 } from "@t3tools/shared/backgroundActivitySettings";
+import * as Duration from "effect/Duration";
+import * as Option from "effect/Option";
+import { ChevronDownIcon, GitPullRequestIcon, RefreshCwIcon } from "lucide-react";
+import { useState, type ComponentType, type ReactNode } from "react";
 
 import { usePrimarySettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
@@ -33,7 +32,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "../ui/empty";
-import { Skeleton } from "../ui/skeleton";
 import {
   NumberField,
   NumberFieldDecrement,
@@ -41,6 +39,7 @@ import {
   NumberFieldIncrement,
   NumberFieldInput,
 } from "../ui/number-field";
+import { Skeleton } from "../ui/skeleton";
 import { Switch } from "../ui/switch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
@@ -51,7 +50,7 @@ import {
   GitIcon,
   GitLabIcon,
   JujutsuIcon,
-  type Icon,
+  WorktrunkIcon,
 } from "../Icons";
 import { RedactedSensitiveText } from "./RedactedSensitiveText";
 import { SourceControlWritingSettingsSection } from "./SourceControlWritingSettings";
@@ -66,18 +65,24 @@ import { searchableSetting } from "./settingsSearch";
 const EMPTY_DISCOVERY_RESULT: SourceControlDiscoveryResult = {
   versionControlSystems: [],
   sourceControlProviders: [],
+  worktreeManagers: [],
 };
 
-const SOURCE_CONTROL_PROVIDER_ICONS: Partial<Record<SourceControlProviderKind, Icon>> = {
+type DiscoveryItem =
+  | VcsDiscoveryItem
+  | SourceControlProviderDiscoveryItem
+  | WorktreeManagerDiscoveryItem;
+
+const SOURCE_CONTROL_ICONS: Partial<
+  Record<DiscoveryItem["kind"], ComponentType<{ readonly className?: string | undefined }>>
+> = {
   github: GitHubIcon,
   gitlab: GitLabIcon,
   "azure-devops": AzureDevOpsIcon,
   bitbucket: BitbucketIcon,
-};
-
-const VCS_ICONS: Partial<Record<VcsDriverKind, Icon>> = {
   git: GitIcon,
   jj: JujutsuIcon,
+  worktrunk: WorktrunkIcon,
 };
 
 const SOURCE_CONTROL_SKELETON_ROWS = ["primary", "secondary"] as const;
@@ -126,13 +131,11 @@ function optionLabel(value: Option.Option<string>): string | null {
   return Option.getOrNull(value);
 }
 
-function isProviderDiscoveryItem(
-  item: VcsDiscoveryItem | SourceControlProviderDiscoveryItem,
-): item is SourceControlProviderDiscoveryItem {
+function isProviderDiscoveryItem(item: DiscoveryItem): item is SourceControlProviderDiscoveryItem {
   return "auth" in item;
 }
 
-function isVcsNotReady(item: VcsDiscoveryItem | SourceControlProviderDiscoveryItem): boolean {
+function isVcsNotReady(item: DiscoveryItem): boolean {
   return !isProviderDiscoveryItem(item) && !item.implemented;
 }
 
@@ -160,22 +163,16 @@ function RedactedAccount(props: { readonly account: string | null }) {
   );
 }
 
-function itemStatusDot(item: VcsDiscoveryItem | SourceControlProviderDiscoveryItem): string {
+function itemStatusDot(item: DiscoveryItem): string {
   if (isVcsNotReady(item)) return "bg-muted-foreground/35";
   if (item.status !== "available") return "bg-warning";
   if (isProviderDiscoveryItem(item) && item.auth.status !== "authenticated") return "bg-warning";
   return "bg-success";
 }
 
-function SourceControlItemMark({
-  item,
-}: {
-  readonly item: VcsDiscoveryItem | SourceControlProviderDiscoveryItem;
-}) {
+function SourceControlItemMark({ item }: { readonly item: DiscoveryItem }) {
   const dotClassName = itemStatusDot(item);
-  const Icon = isProviderDiscoveryItem(item)
-    ? SOURCE_CONTROL_PROVIDER_ICONS[item.kind]
-    : VCS_ICONS[item.kind];
+  const Icon = SOURCE_CONTROL_ICONS[item.kind];
 
   if (!Icon) {
     return <span className={cn("size-2 shrink-0 rounded-full", dotClassName)} aria-hidden />;
@@ -183,7 +180,7 @@ function SourceControlItemMark({
 
   return (
     <span className="relative inline-flex size-5 shrink-0 items-center justify-center">
-      <Icon className="size-4.5 text-foreground/80" aria-hidden />
+      <Icon className="size-4.5 text-foreground/80" />
       <span
         className={cn(
           "pointer-events-none absolute -left-0.5 -top-0.5 size-2 rounded-full ring-2 ring-background",
@@ -199,10 +196,12 @@ function itemSummary({
   item,
   auth,
   authAccount,
+  enabled,
 }: {
-  readonly item: VcsDiscoveryItem | SourceControlProviderDiscoveryItem;
+  readonly item: DiscoveryItem;
   readonly auth: SourceControlProviderAuth | null;
   readonly authAccount: string | null;
+  readonly enabled: boolean;
 }) {
   if (isVcsNotReady(item)) {
     return <span>Support for {item.label} is coming soon.</span>;
@@ -248,20 +247,27 @@ function itemSummary({
     );
   }
 
-  return <span>Available</span>;
+  const hint = enabled ? item.enabledHint : item.enableHint;
+  return <span>{hint ? `Available. ${hint}` : "Available."}</span>;
 }
 
 function DiscoveryItemRow({
   item,
   children,
+  checked,
+  onCheckedChange,
 }: {
-  readonly item: VcsDiscoveryItem | SourceControlProviderDiscoveryItem;
+  readonly item: DiscoveryItem;
   readonly children?: ReactNode;
+  readonly checked?: boolean;
+  readonly onCheckedChange?: (checked: boolean) => void;
 }) {
   const version = optionLabel(item.version);
-  const enabled = isProviderDiscoveryItem(item)
-    ? item.status === "available" && item.auth.status === "authenticated"
-    : item.status === "available" && item.implemented;
+  const enabled =
+    checked ??
+    (isProviderDiscoveryItem(item)
+      ? item.status === "available" && item.auth.status === "authenticated"
+      : item.status === "available" && item.implemented);
   const auth = isProviderDiscoveryItem(item) ? item.auth : null;
   const authStatus = auth ? authPresentation(auth) : null;
   const authAccount = auth ? optionLabel(auth.account) : null;
@@ -296,7 +302,7 @@ function DiscoveryItemRow({
               ) : null}
             </div>
             <p className="flex min-w-0 flex-wrap items-center gap-x-1 text-[13px] leading-[1.45] text-muted-foreground/80">
-              {itemSummary({ item, auth, authAccount })}
+              {itemSummary({ item, auth, authAccount, enabled })}
             </p>
           </div>
           <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
@@ -314,7 +320,16 @@ function DiscoveryItemRow({
               </Button>
             ) : null}
             {!isVcsNotReady(item) ? (
-              <Switch checked={enabled} disabled aria-label={`${item.label} availability`} />
+              <Switch
+                checked={checked ?? enabled}
+                disabled={onCheckedChange === undefined}
+                onCheckedChange={onCheckedChange}
+                aria-label={
+                  onCheckedChange === undefined
+                    ? `${item.label} availability`
+                    : `Use ${item.label} for new worktrees`
+                }
+              />
             ) : null}
           </div>
         </div>
@@ -493,6 +508,8 @@ function EmptySourceControlDiscovery({
 }
 
 export function SourceControlSettingsPanel() {
+  const settings = usePrimarySettings();
+  const updateSettings = useUpdatePrimarySettings();
   const { environments } = useEnvironments();
   const primaryEnvironment = usePrimaryEnvironment();
   const fallbackEnvironment =
@@ -582,6 +599,27 @@ export function SourceControlSettingsPanel() {
       )}
 
       {isPrimaryEnvironment ? <SourceControlWritingSettingsSection /> : null}
+
+      {result.worktreeManagers.length > 0 ? (
+        <SettingsSection title="Worktrees">
+          {result.worktreeManagers.map((item) => {
+            const available = item.status === "available";
+            return (
+              <DiscoveryItemRow
+                key={`worktree-manager:${item.kind}`}
+                item={item}
+                checked={available && settings.worktrunkEnabled}
+                {...(isPrimaryEnvironment && available
+                  ? {
+                      onCheckedChange: (worktrunkEnabled: boolean) =>
+                        updateSettings({ worktrunkEnabled }),
+                    }
+                  : {})}
+              />
+            );
+          })}
+        </SettingsSection>
+      ) : null}
     </SettingsPageContainer>
   );
 }

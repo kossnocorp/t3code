@@ -56,6 +56,9 @@ it.effect("reports implemented tools separately from locally available executabl
       if (input.command === "git") {
         return Effect.succeed(processOutput("git version 2.51.0\n"));
       }
+      if (input.command === "wt") {
+        return Effect.succeed(processOutput("wt v0.74.0\n"));
+      }
       if (input.command === "gh" && input.args[0] === "--version") {
         return Effect.succeed(processOutput("gh version 2.83.0\n"));
       }
@@ -160,6 +163,25 @@ it.effect("reports implemented tools separately from locally available executabl
           status: "available",
           auth: "unauthenticated",
           account: Option.none(),
+        },
+      ],
+    );
+    assert.deepStrictEqual(
+      result.worktreeManagers.map((item) => ({
+        kind: item.kind,
+        status: item.status,
+        version: item.version,
+        enableHint: item.enableHint,
+        enabledHint: item.enabledHint,
+      })),
+      [
+        {
+          kind: "worktrunk",
+          status: "available",
+          version: Option.some("wt version 0.74.0"),
+          enableHint: "Enable Worktrunk to use it to manage Git worktrees.",
+          enabledHint:
+            "Git Worktrees are managed by Worktrunk. See documentation at https://worktrunk.dev/",
         },
       ],
     );

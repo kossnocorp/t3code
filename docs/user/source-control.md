@@ -63,6 +63,13 @@ The **Source Control settings** page shows you exactly what's connected:
 
 Run a quick **Rescan** after setting up a new machine or changing credentials.
 
+### Create Worktrees with Worktrunk
+
+If [Worktrunk](https://worktrunk.dev/) is installed on the machine running T3 Code, it appears under
+**Settings → Source Control → Worktrees**. Turn it on to create new worktree threads with Worktrunk.
+T3 Code then follows your Worktrunk path template and runs your configured Worktrunk hooks. The
+integration is off by default, and existing worktrees continue to work when it is turned off.
+
 ## Getting Started
 
 ### For GitHub (Recommended for most users)

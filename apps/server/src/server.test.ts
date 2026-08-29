@@ -51,8 +51,8 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
-import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as Option from "effect/Option";
+import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as Path from "effect/Path";
 import * as PubSub from "effect/PubSub";
 import * as Queue from "effect/Queue";
@@ -143,6 +143,7 @@ import * as VcsStatusBroadcaster from "./vcs/VcsStatusBroadcaster.ts";
 import * as VcsDriverRegistry from "./vcs/VcsDriverRegistry.ts";
 import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
+import * as Worktrunk from "./git/Worktrunk.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
@@ -399,6 +400,7 @@ const buildAppUnderTest = (options?: {
     vcsDriver?: Partial<VcsDriver.VcsDriver["Service"]>;
     vcsDriverRegistry?: Partial<VcsDriverRegistry.VcsDriverRegistry["Service"]>;
     gitVcsDriver?: Partial<GitVcsDriver.GitVcsDriver["Service"]>;
+    worktrunk?: Partial<Worktrunk.Worktrunk["Service"]>;
     gitManager?: Partial<GitManager.GitManager["Service"]>;
     sourceControlRepositoryService?: Partial<
       SourceControlRepositoryService.SourceControlRepositoryService["Service"]
@@ -562,11 +564,17 @@ const buildAppUnderTest = (options?: {
         }),
       ...options?.layers?.vcsDriverRegistry,
     });
+    const serverSettingsLayer = Layer.mock(ServerSettings.ServerSettingsService)({
+      ...options?.layers?.serverSettings,
+    });
     const gitVcsDriverLayer = Layer.mock(GitVcsDriver.GitVcsDriver)({
       ...options?.layers?.gitVcsDriver,
     });
     const gitManagerLayer = Layer.mock(GitManager.GitManager)({
       ...options?.layers?.gitManager,
+    });
+    const worktrunkLayer = Layer.mock(Worktrunk.Worktrunk)({
+      ...options?.layers?.worktrunk,
     });
     const workspaceEntriesLayer = WorkspaceEntries.layer.pipe(
       Layer.provide(WorkspacePaths.layer),
@@ -585,9 +593,11 @@ const buildAppUnderTest = (options?: {
       ),
     );
     const gitWorkflowLayer = GitWorkflowService.layer.pipe(
+      Layer.provideMerge(serverSettingsLayer),
       Layer.provideMerge(vcsDriverRegistryLayer),
       Layer.provideMerge(gitVcsDriverLayer),
       Layer.provideMerge(gitManagerLayer),
+      Layer.provideMerge(worktrunkLayer),
     );
     const vcsProvisioningLayer = VcsProvisioningService.layer.pipe(
       Layer.provide(vcsDriverRegistryLayer),

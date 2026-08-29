@@ -6,13 +6,16 @@ import { VcsRepositoryDetectionError } from "@t3tools/contracts";
 
 import * as GitManager from "./GitManager.ts";
 import * as GitWorkflowService from "./GitWorkflowService.ts";
+import * as Worktrunk from "./Worktrunk.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
+import * as ServerSettingsService from "../serverSettings.ts";
 
 function makeLayer(input: {
   readonly detect: VcsDriverRegistry.VcsDriverRegistry["Service"]["detect"];
 }) {
   return GitWorkflowService.layer.pipe(
+    Layer.provide(Layer.mock(ServerSettingsService.ServerSettingsService)({})),
     Layer.provide(
       Layer.mock(VcsDriverRegistry.VcsDriverRegistry)({
         detect: input.detect,
@@ -20,6 +23,7 @@ function makeLayer(input: {
     ),
     Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
     Layer.provide(Layer.mock(GitManager.GitManager)({})),
+    Layer.provide(Layer.mock(Worktrunk.Worktrunk)({})),
   );
 }
 
@@ -87,6 +91,7 @@ describe("GitWorkflowService", () => {
     const status = vi.fn();
 
     const testLayer = GitWorkflowService.layer.pipe(
+      Layer.provide(Layer.mock(ServerSettingsService.ServerSettingsService)({})),
       Layer.provide(
         Layer.mock(VcsDriverRegistry.VcsDriverRegistry)({
           detect: () => Effect.succeed(null),
@@ -100,6 +105,7 @@ describe("GitWorkflowService", () => {
           status,
         }),
       ),
+      Layer.provide(Layer.mock(Worktrunk.Worktrunk)({})),
     );
 
     return Effect.gen(function* () {

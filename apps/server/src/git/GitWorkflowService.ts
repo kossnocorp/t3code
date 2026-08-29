@@ -29,8 +29,10 @@ import {
 } from "@t3tools/contracts";
 
 import * as GitManager from "./GitManager.ts";
+import * as Worktrunk from "./Worktrunk.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
+import * as ServerSettingsService from "../serverSettings.ts";
 
 export class GitWorkflowService extends Context.Service<
   GitWorkflowService,
@@ -141,6 +143,8 @@ export const make = Effect.gen(function* () {
   const registry = yield* VcsDriverRegistry.VcsDriverRegistry;
   const git = yield* GitVcsDriver.GitVcsDriver;
   const gitManager = yield* GitManager.GitManager;
+  const worktrunk = yield* Worktrunk.Worktrunk;
+  const serverSettings = yield* ServerSettingsService.ServerSettingsService;
 
   const ensureGit = Effect.fn("GitWorkflowService.ensureGit")(function* (
     operation: string,
@@ -248,6 +252,24 @@ export const make = Effect.gen(function* () {
     return true;
   });
 
+  const getServerSettingsForCommand = Effect.fn("GitWorkflowService.getServerSettingsForCommand")(
+    function* (operation: string, cwd: string) {
+      const settings = yield* serverSettings.getSettings.pipe(
+        Effect.mapError(
+          (cause) =>
+            new GitCommandError({
+              operation,
+              command: "vcs-route",
+              cwd,
+              detail: "Could not read the server settings.",
+              cause,
+            }),
+        ),
+      );
+      return settings;
+    },
+  );
+
   const routeGitManager =
     <Input extends { readonly cwd: string }, Output>(
       operation: string,
@@ -303,8 +325,14 @@ export const make = Effect.gen(function* () {
         ),
       ),
     createWorktree: (input) =>
-      ensureGitCommand("GitWorkflowService.createWorktree", input.cwd).pipe(
-        Effect.andThen(git.createWorktree(input)),
+      getServerSettingsForCommand("GitWorkflowService.createWorktree", input.cwd).pipe(
+        Effect.andThen((settings) =>
+          settings.worktrunkEnabled
+            ? worktrunk.createWorktree(input)
+            : ensureGitCommand("GitWorkflowService.createWorktree", input.cwd).pipe(
+                Effect.andThen(git.createWorktree(input)),
+              ),
+        ),
       ),
     fetchRemote: (input) =>
       ensureGitCommand("GitWorkflowService.fetchRemote", input.cwd).pipe(

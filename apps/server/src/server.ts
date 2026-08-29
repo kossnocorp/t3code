@@ -78,6 +78,7 @@ import * as VcsProcess from "./vcs/VcsProcess.ts";
 import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
 import * as VcsStatusBroadcaster from "./vcs/VcsStatusBroadcaster.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
+import * as Worktrunk from "./git/Worktrunk.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as SourceControlProviderRegistry from "./sourceControl/SourceControlProviderRegistry.ts";
 import * as SourceControlRateLimit from "./sourceControl/SourceControlRateLimit.ts";
@@ -298,6 +299,7 @@ const GitLayerLive = Layer.empty.pipe(
 const GitWorkflowLayerLive = GitWorkflowService.layer.pipe(
   Layer.provideMerge(VcsDriverRegistryLayerLive),
   Layer.provideMerge(GitLayerLive),
+  Layer.provide(Worktrunk.layer),
 );
 
 const SourceControlRepositoryServiceLayerLive = SourceControlRepositoryService.layer.pipe(

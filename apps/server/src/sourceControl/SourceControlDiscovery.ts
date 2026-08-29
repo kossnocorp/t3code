@@ -1,4 +1,5 @@
 import {
+  WorktreeManagerDiscoveryItem,
   type SourceControlDiscoveryResult,
   type VcsDiscoveryItem,
   type VcsDriverKind,
@@ -13,19 +14,24 @@ import * as VcsProcess from "../vcs/VcsProcess.ts";
 import { detailFromCause, firstNonEmptyLine } from "./SourceControlProviderDiscovery.ts";
 import * as SourceControlProviderRegistry from "./SourceControlProviderRegistry.ts";
 
-interface DiscoveryProbe {
+interface DiscoveryProbe<Kind extends string> {
+  readonly kind: Kind;
   readonly label: string;
   readonly executable?: string;
   readonly versionArgs?: ReadonlyArray<string>;
   readonly implemented: boolean;
   readonly installHint: string;
+  readonly enableHint?: string;
+  readonly enabledHint?: string;
+  readonly transform?: (result: DiscoveryProbeResult<Kind>) => DiscoveryProbeResult<Kind>;
 }
 
-type VcsProbe = DiscoveryProbe & {
-  readonly kind: VcsDriverKind;
+type VcsProbe = DiscoveryProbe<VcsDriverKind> & {
   readonly executable: string;
   readonly versionArgs: ReadonlyArray<string>;
 };
+
+type WorktreeManagerProbe = DiscoveryProbe<"worktrunk">;
 
 interface DiscoveryProbeResult<Kind extends string> {
   readonly kind: Kind;
@@ -35,6 +41,8 @@ interface DiscoveryProbeResult<Kind extends string> {
   readonly status: "available" | "missing";
   readonly version: Option.Option<string>;
   readonly installHint: string;
+  readonly enableHint: string | undefined;
+  readonly enabledHint: string | undefined;
   readonly detail: Option.Option<string>;
 }
 
@@ -57,6 +65,28 @@ const VCS_PROBES: ReadonlyArray<VcsProbe> = [
   },
 ];
 
+const WORKTRUNK_DOCS_SNIPPET = "See documentation at https://worktrunk.dev.";
+
+const WORKTREE_MANAGER_PROBES: ReadonlyArray<WorktreeManagerProbe> = [
+  {
+    kind: "worktrunk",
+    label: "Worktrunk",
+    executable: "wt",
+    versionArgs: ["--version"],
+    implemented: true,
+    installHint:
+      "Install Worktrunk from https://worktrunk.dev/installation/ to use it to manage Git worktrees.",
+    enableHint: `Enable Worktrunk to use it to manage Git worktrees. ${WORKTRUNK_DOCS_SNIPPET}`,
+    enabledHint: `Git Worktrees are managed by Worktrunk. ${WORKTRUNK_DOCS_SNIPPET}`,
+    transform: (result) => ({
+      ...result,
+      version: Option.map(result.version, (version) =>
+        version.replace(/^wt v(?=\d)/, "wt version "),
+      ),
+    }),
+  },
+];
+
 export class SourceControlDiscovery extends Context.Service<
   SourceControlDiscovery,
   {
@@ -69,8 +99,8 @@ export const make = Effect.gen(function* () {
   const process = yield* VcsProcess.VcsProcess;
   const sourceControlProviders = yield* SourceControlProviderRegistry.SourceControlProviderRegistry;
 
-  const probe = <Kind extends VcsDriverKind>(
-    input: DiscoveryProbe & { readonly kind: Kind },
+  const probe = <Kind extends string>(
+    input: DiscoveryProbe<Kind>,
   ): Effect.Effect<DiscoveryProbeResult<Kind>> => {
     const executable = input.executable;
     const versionArgs = input.versionArgs;
@@ -83,7 +113,9 @@ export const make = Effect.gen(function* () {
         status: "missing" as const,
         version: Option.none<string>(),
         installHint: input.installHint,
-        detail: Option.some(input.installHint),
+        enableHint: input.enableHint,
+        enabledHint: input.enabledHint,
+        detail: Option.fromUndefinedOr(input.installHint),
       } satisfies DiscoveryProbeResult<Kind>);
     }
 
@@ -110,9 +142,12 @@ export const make = Effect.gen(function* () {
                 firstNonEmptyLine(result.stderr),
               ),
               installHint: input.installHint,
+              enableHint: input.enableHint,
+              enabledHint: input.enabledHint,
               detail: Option.none<string>(),
             }) satisfies DiscoveryProbeResult<Kind>,
         ),
+        Effect.map((result) => (input.transform ? input.transform(result) : result)),
         Effect.catch((cause) =>
           Effect.succeed({
             kind: input.kind,
@@ -122,6 +157,8 @@ export const make = Effect.gen(function* () {
             status: "missing" as const,
             version: Option.none<string>(),
             installHint: input.installHint,
+            enableHint: input.enableHint,
+            enabledHint: input.enabledHint,
             detail: detailFromCause(cause),
           } satisfies DiscoveryProbeResult<Kind>),
         ),
@@ -135,6 +172,12 @@ export const make = Effect.gen(function* () {
         { concurrency: "unbounded" },
       ),
       sourceControlProviders: sourceControlProviders.discover,
+      worktreeManagers: Effect.all(
+        WORKTREE_MANAGER_PROBES.map((entry) => probe(entry)) as ReadonlyArray<
+          Effect.Effect<WorktreeManagerDiscoveryItem>
+        >,
+        { concurrency: "unbounded" },
+      ),
     }),
   });
 });

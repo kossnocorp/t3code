@@ -24,6 +24,33 @@ export const GitIcon: Icon = (props) => (
   </svg>
 );
 
+export const WorktrunkIcon = ({
+  monochrome = false,
+  ...props
+}: SVGProps<SVGSVGElement> & { readonly monochrome?: boolean }) => {
+  const color = monochrome ? "currentColor" : "#e9a547";
+
+  return (
+    <svg {...props} viewBox="0 0 512 512" fill="none">
+      <g fill={color}>
+        <path
+          d="m76.5 76.5 56 180M132.5 256.5h124M435 76.5l-56 180M379 256.5H255M256.5 76.5v360"
+          stroke={color}
+          strokeLinecap="square"
+          strokeWidth="13"
+        />
+        <circle cx="76.5" cy="76.5" r="25.5" />
+        <circle cx="132.5" cy="256.5" r="25.5" />
+        <circle cx="435" cy="76.5" r="25.5" />
+        <circle cx="379" cy="256.5" r="25.5" />
+        <circle cx="256.5" cy="256.5" r="25.5" />
+        <circle cx="255.5" cy="436.5" r="25.5" />
+        <circle cx="255.5" cy="76.5" r="25.5" />
+      </g>
+    </svg>
+  );
+};
+
 export const JujutsuIcon: Icon = (props) => {
   const groupId = `${useId().replaceAll(":", "")}-jj-a`;
 

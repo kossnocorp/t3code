@@ -208,6 +208,7 @@ describe("add project shared logic", () => {
           },
         },
       ],
+      worktreeManagers: [],
     };
 
     const readiness = buildAddProjectRemoteSourceReadiness(discovery);
