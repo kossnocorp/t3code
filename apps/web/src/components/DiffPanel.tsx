@@ -1,11 +1,12 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { FileDiffContentsLoader } from "@pierre/diffs";
 import { useParams } from "@tanstack/react-router";
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
 import type { ScopedThreadRef, TurnId } from "@t3tools/contracts";
 import {
   ArrowRightIcon,
@@ -47,6 +48,7 @@ import { DiffPanelLoadingState, DiffPanelShell, type DiffPanelMode } from "./Dif
 import { DiffStatLabel } from "./chat/DiffStatLabel";
 import { AnnotatableCodeView, type AnnotatableCodeViewHandle } from "./diffs/AnnotatableCodeView";
 import { Button } from "./ui/button";
+import { Checkbox } from "./ui/checkbox";
 import { ToggleGroup, Toggle } from "./ui/toggle-group";
 import { Switch } from "./ui/switch";
 import {
@@ -159,6 +161,11 @@ export default function DiffPanel({
       routeThreadRef,
       initialGitScope === "unstaged",
     ),
+  );
+  const followLatestTurn = useDiffPanelStore((state) =>
+    routeThreadRef
+      ? (state.followLatestTurnByThreadKey[scopedThreadKey(routeThreadRef)] ?? false)
+      : false,
   );
   const isGitRepo = gitStatusQuery.data?.isRepo ?? true;
   const { turnDiffSummaries, inferredCheckpointTurnCountByTurnId } =
@@ -500,6 +507,10 @@ export default function DiffPanel({
     if (!routeThreadRef) return;
     useDiffPanelStore.getState().selectTurn(routeThreadRef, turnId);
   };
+  const selectLatestTurn = (turnId: TurnId) => {
+    if (!routeThreadRef) return;
+    useDiffPanelStore.getState().selectLatestTurn(routeThreadRef, turnId);
+  };
   const selectGitScope = (scope: "branch" | "unstaged") => {
     if (!routeThreadRef) return;
     useDiffPanelStore.getState().selectGitScope(routeThreadRef, scope);
@@ -548,7 +559,7 @@ export default function DiffPanel({
                   : undefined
               }
               onClick={() => {
-                if (latestTurn) selectTurn(latestTurn.turnId);
+                if (latestTurn) selectLatestTurn(latestTurn.turnId);
               }}
             >
               <span>Latest turn</span>
@@ -580,6 +591,19 @@ export default function DiffPanel({
             </DropdownMenuSub>
           </DropdownMenuContent>
         </DropdownMenu>
+        {selectedTurnId !== null && selectedTurn?.turnId === latestTurn?.turnId && (
+          <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+            <Checkbox
+              aria-label="Follow latest turn"
+              checked={followLatestTurn}
+              onCheckedChange={(checked) => {
+                if (!routeThreadRef) return;
+                useDiffPanelStore.getState().setFollowLatestTurn(routeThreadRef, checked);
+              }}
+            />
+            <span>Follow</span>
+          </label>
+        )}
         {selectedTurnId === null && selectedGitScope === "branch" && selectedGitSource?.baseRef && (
           <div
             className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden text-xs text-muted-foreground"

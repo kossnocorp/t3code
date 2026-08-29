@@ -18,11 +18,15 @@ const DEFAULT_WORKING_TREE_SELECTION: DiffPanelSelection = { kind: "unstaged" };
 interface DiffPanelStoreState {
   byThreadKey: Record<string, DiffPanelSelection>;
   branchBaseRefByThreadKey: Record<string, string | null>;
+  followLatestTurnByThreadKey: Record<string, boolean>;
+  followedTurnIdByThreadKey: Record<string, TurnId>;
   diffRenderMode: DiffRenderMode;
   setDiffRenderMode: (mode: DiffRenderMode) => void;
   selectGitScope: (ref: ScopedThreadRef, scope: "branch" | "unstaged") => void;
   selectBranchBaseRef: (ref: ScopedThreadRef, baseRef: string | null) => void;
   selectTurn: (ref: ScopedThreadRef, turnId: TurnId, filePath?: string) => void;
+  selectLatestTurn: (ref: ScopedThreadRef, turnId: TurnId) => void;
+  setFollowLatestTurn: (ref: ScopedThreadRef, follow: boolean) => void;
   reconcileTurnSelection: (ref: ScopedThreadRef, availableTurnIds: ReadonlyArray<TurnId>) => void;
   removeThread: (ref: ScopedThreadRef) => void;
 }
@@ -37,6 +41,8 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
     (set) => ({
       byThreadKey: {},
       branchBaseRefByThreadKey: {},
+      followLatestTurnByThreadKey: {},
+      followedTurnIdByThreadKey: {},
       diffRenderMode: "stacked",
       setDiffRenderMode: (diffRenderMode) => set({ diffRenderMode }),
       selectGitScope: (ref, scope) =>
@@ -80,6 +86,8 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
         set((state) => {
           const threadKey = scopedThreadKey(ref);
           const previous = state.byThreadKey[threadKey];
+          const { [threadKey]: _removedFollowedTurn, ...followedTurnIdByThreadKey } =
+            state.followedTurnIdByThreadKey;
           return {
             byThreadKey: {
               ...state.byThreadKey,
@@ -90,6 +98,43 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
                 revealRequestId: previous?.kind === "turn" ? previous.revealRequestId + 1 : 1,
               },
             },
+            followedTurnIdByThreadKey,
+          };
+        }),
+      selectLatestTurn: (ref, turnId) =>
+        set((state) => {
+          const threadKey = scopedThreadKey(ref);
+          const previous = state.byThreadKey[threadKey];
+          return {
+            byThreadKey: {
+              ...state.byThreadKey,
+              [threadKey]: {
+                kind: "turn",
+                turnId,
+                filePath: null,
+                revealRequestId: previous?.kind === "turn" ? previous.revealRequestId + 1 : 1,
+              },
+            },
+            followedTurnIdByThreadKey: state.followLatestTurnByThreadKey[threadKey]
+              ? { ...state.followedTurnIdByThreadKey, [threadKey]: turnId }
+              : state.followedTurnIdByThreadKey,
+          };
+        }),
+      setFollowLatestTurn: (ref, follow) =>
+        set((state) => {
+          const threadKey = scopedThreadKey(ref);
+          const selection = state.byThreadKey[threadKey];
+          const { [threadKey]: _removed, ...remainingFollowedTurnIds } =
+            state.followedTurnIdByThreadKey;
+          return {
+            followLatestTurnByThreadKey: {
+              ...state.followLatestTurnByThreadKey,
+              [threadKey]: follow,
+            },
+            followedTurnIdByThreadKey:
+              follow && selection?.kind === "turn"
+                ? { ...state.followedTurnIdByThreadKey, [threadKey]: selection.turnId }
+                : remainingFollowedTurnIds,
           };
         }),
       reconcileTurnSelection: (ref, availableTurnIds) =>
@@ -97,10 +142,26 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
           const threadKey = scopedThreadKey(ref);
           const previous = state.byThreadKey[threadKey];
           const latestTurnId = availableTurnIds[0];
+          if (previous?.kind !== "turn" || latestTurnId === undefined) {
+            return state;
+          }
+          if (previous.turnId === latestTurnId) {
+            if (
+              state.followLatestTurnByThreadKey[threadKey] &&
+              state.followedTurnIdByThreadKey[threadKey] !== latestTurnId
+            ) {
+              return {
+                followedTurnIdByThreadKey: {
+                  ...state.followedTurnIdByThreadKey,
+                  [threadKey]: latestTurnId,
+                },
+              };
+            }
+            return state;
+          }
           if (
-            previous?.kind !== "turn" ||
-            latestTurnId === undefined ||
-            availableTurnIds.includes(previous.turnId)
+            availableTurnIds.includes(previous.turnId) &&
+            state.followedTurnIdByThreadKey[threadKey] !== previous.turnId
           ) {
             return state;
           }
@@ -109,18 +170,35 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
               ...state.byThreadKey,
               [threadKey]: { ...previous, turnId: latestTurnId },
             },
+            followedTurnIdByThreadKey: state.followLatestTurnByThreadKey[threadKey]
+              ? { ...state.followedTurnIdByThreadKey, [threadKey]: latestTurnId }
+              : state.followedTurnIdByThreadKey,
           };
         }),
       removeThread: (ref) =>
         set((state) => {
           const threadKey = scopedThreadKey(ref);
-          if (!(threadKey in state.byThreadKey) && !(threadKey in state.branchBaseRefByThreadKey)) {
+          if (
+            !(threadKey in state.byThreadKey) &&
+            !(threadKey in state.branchBaseRefByThreadKey) &&
+            !(threadKey in state.followLatestTurnByThreadKey) &&
+            !(threadKey in state.followedTurnIdByThreadKey)
+          ) {
             return state;
           }
           const { [threadKey]: _removed, ...byThreadKey } = state.byThreadKey;
           const { [threadKey]: _removedBaseRef, ...branchBaseRefByThreadKey } =
             state.branchBaseRefByThreadKey;
-          return { byThreadKey, branchBaseRefByThreadKey };
+          const { [threadKey]: _removedFollowLatest, ...followLatestTurnByThreadKey } =
+            state.followLatestTurnByThreadKey;
+          const { [threadKey]: _removedFollowedTurn, ...followedTurnIdByThreadKey } =
+            state.followedTurnIdByThreadKey;
+          return {
+            byThreadKey,
+            branchBaseRefByThreadKey,
+            followLatestTurnByThreadKey,
+            followedTurnIdByThreadKey,
+          };
         }),
     }),
     {
@@ -132,6 +210,8 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
       partialize: (state) => ({
         byThreadKey: state.byThreadKey,
         branchBaseRefByThreadKey: state.branchBaseRefByThreadKey,
+        followLatestTurnByThreadKey: state.followLatestTurnByThreadKey,
+        followedTurnIdByThreadKey: state.followedTurnIdByThreadKey,
         diffRenderMode: state.diffRenderMode,
       }),
     },

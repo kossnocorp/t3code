@@ -11,6 +11,8 @@ describe("diffPanelStore", () => {
     useDiffPanelStore.setState({
       byThreadKey: {},
       branchBaseRefByThreadKey: {},
+      followLatestTurnByThreadKey: {},
+      followedTurnIdByThreadKey: {},
       diffRenderMode: "stacked",
     }),
   );
@@ -103,6 +105,51 @@ describe("diffPanelStore", () => {
       turnId: latestTurnId,
       filePath: "src/app.ts",
       revealRequestId: 1,
+    });
+  });
+
+  it("follows the latest turn when the persisted preference is enabled", () => {
+    const previousTurnId = TurnId.make("turn-previous");
+    const latestTurnId = TurnId.make("turn-latest");
+    useDiffPanelStore.getState().selectLatestTurn(THREAD_REF, previousTurnId);
+    useDiffPanelStore.getState().setFollowLatestTurn(THREAD_REF, true);
+    useDiffPanelStore.getState().reconcileTurnSelection(THREAD_REF, [latestTurnId, previousTurnId]);
+
+    expect(
+      selectThreadDiffPanelSelection(useDiffPanelStore.getState().byThreadKey, THREAD_REF),
+    ).toMatchObject({ kind: "turn", turnId: latestTurnId });
+    expect(
+      useDiffPanelStore.persist.getOptions().partialize?.(useDiffPanelStore.getState()),
+    ).toMatchObject({ followLatestTurnByThreadKey: { "environment-1:thread-1": true } });
+  });
+
+  it("keeps an available historical turn selected when follow is disabled", () => {
+    const previousTurnId = TurnId.make("turn-previous");
+    const latestTurnId = TurnId.make("turn-latest");
+    useDiffPanelStore.getState().selectTurn(THREAD_REF, previousTurnId);
+    useDiffPanelStore.getState().reconcileTurnSelection(THREAD_REF, [latestTurnId, previousTurnId]);
+
+    expect(
+      selectThreadDiffPanelSelection(useDiffPanelStore.getState().byThreadKey, THREAD_REF),
+    ).toMatchObject({ kind: "turn", turnId: previousTurnId });
+  });
+
+  it("pauses following when a historical turn is selected without clearing the preference", () => {
+    const previousTurnId = TurnId.make("turn-previous");
+    const historicalTurnId = TurnId.make("turn-historical");
+    const latestTurnId = TurnId.make("turn-latest");
+    useDiffPanelStore.getState().selectLatestTurn(THREAD_REF, previousTurnId);
+    useDiffPanelStore.getState().setFollowLatestTurn(THREAD_REF, true);
+    useDiffPanelStore.getState().selectTurn(THREAD_REF, historicalTurnId);
+    useDiffPanelStore
+      .getState()
+      .reconcileTurnSelection(THREAD_REF, [latestTurnId, previousTurnId, historicalTurnId]);
+
+    expect(
+      selectThreadDiffPanelSelection(useDiffPanelStore.getState().byThreadKey, THREAD_REF),
+    ).toMatchObject({ kind: "turn", turnId: historicalTurnId });
+    expect(useDiffPanelStore.getState().followLatestTurnByThreadKey).toMatchObject({
+      "environment-1:thread-1": true,
     });
   });
 });
