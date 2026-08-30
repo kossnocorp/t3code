@@ -33,6 +33,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import * as CheckpointStore from "../../checkpointing/CheckpointStore.ts";
 import * as VcsDriverRegistry from "../../vcs/VcsDriverRegistry.ts";
 import * as VcsProcess from "../../vcs/VcsProcess.ts";
+import * as ServerSettings from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
 import { CheckpointReactorLive } from "./CheckpointReactor.ts";
@@ -286,6 +287,7 @@ describe("CheckpointReactor", () => {
     readonly providerSessionCwd?: string;
     readonly providerName?: ProviderDriverKind;
     readonly gitStatusRefreshCalls?: Array<string>;
+    readonly branchPrefix?: string;
   }) {
     const cwd = createGitRepository();
     tempDirs.push(cwd);
@@ -350,6 +352,11 @@ describe("CheckpointReactor", () => {
       ),
       Layer.provideMerge(WorkspacePaths.layer),
       Layer.provideMerge(VcsProcess.layer),
+      Layer.provideMerge(
+        ServerSettings.layerTest(
+          options?.branchPrefix !== undefined ? { branchPrefix: options.branchPrefix } : {},
+        ),
+      ),
       Layer.provideMerge(ServerConfigLayer),
       Layer.provideMerge(NodeServices.layer),
     );
@@ -630,6 +637,31 @@ describe("CheckpointReactor", () => {
     const snapshot = await harness.readModel();
     const thread = snapshot.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
     expect(thread?.branch).toBe("t3code/original-branch");
+  });
+
+  it("does not adopt a temporary placeholder checkout with a custom prefix", async () => {
+    const harness = await createHarness({
+      seedFilesystemCheckpoints: false,
+      threadBranch: "agent/original-branch",
+      localStatusRefName: "agent/0a1b2c3d",
+      branchPrefix: "agent/",
+    });
+
+    harness.provider.emit({
+      type: "turn.completed",
+      eventId: EventId.make("evt-turn-completed-custom-branch-drift-temp"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: "2026-01-01T00:00:00.000Z",
+      threadId: ThreadId.make("thread-1"),
+      turnId: asTurnId("turn-custom-branch-drift-temp"),
+      payload: { state: "completed" },
+    });
+
+    await harness.drain();
+
+    const snapshot = await harness.readModel();
+    const thread = snapshot.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(thread?.branch).toBe("agent/original-branch");
   });
 
   it("ignores auxiliary thread turn completion while primary turn is active", async () => {

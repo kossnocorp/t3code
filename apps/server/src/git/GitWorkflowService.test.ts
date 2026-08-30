@@ -94,7 +94,37 @@ describe("GitWorkflowService", () => {
     ),
   );
 
-  it.effect("keeps semantic creation branches without reading Worktrunk settings", () => {
+  it.effect("recognizes temporary creation branches with a custom prefix", () => {
+    const generateWorktreeBranchName = vi.fn(() => Effect.succeed("agent/reconnect-spinner"));
+
+    return Effect.gen(function* () {
+      const workflow = yield* GitWorkflowService.GitWorkflowService;
+      const branch = yield* workflow.resolveWorktreeCreationBranch({
+        cwd: "/repo",
+        branch: "agent/deadbeef",
+        message: "Fix the reconnect spinner",
+      });
+
+      assert.equal(branch, "agent/reconnect-spinner");
+    }).pipe(
+      Effect.provide(
+        makeLayer({
+          detect: () => Effect.succeed(null),
+          resolve: () => Effect.succeed({ kind: "git" } as VcsDriverRegistry.VcsDriverHandle),
+          serverSettings: {
+            getSettings: Effect.succeed({
+              ...DEFAULT_SERVER_SETTINGS,
+              branchPrefix: "agent/",
+              worktrunkEnabled: true,
+            }),
+          },
+          gitManager: { generateWorktreeBranchName },
+        }),
+      ),
+    );
+  });
+
+  it.effect("keeps semantic creation branches after resolving the configured prefix", () => {
     let settingsReads = 0;
 
     return Effect.gen(function* () {
@@ -106,7 +136,7 @@ describe("GitWorkflowService", () => {
       });
 
       assert.equal(branch, "t3code/reconnect-spinner");
-      assert.equal(settingsReads, 0);
+      assert.equal(settingsReads, 1);
     }).pipe(
       Effect.provide(
         makeLayer({

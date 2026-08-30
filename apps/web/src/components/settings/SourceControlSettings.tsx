@@ -41,6 +41,7 @@ import {
 } from "../ui/number-field";
 import { Skeleton } from "../ui/skeleton";
 import { Switch } from "../ui/switch";
+import { Input } from "../ui/input";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 import {
@@ -58,6 +59,7 @@ import {
   PolicyTooltip,
   SettingResetButton,
   SettingsPageContainer,
+  SettingsRow,
   SettingsSection,
 } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
@@ -599,6 +601,40 @@ export function SourceControlSettingsPanel() {
       )}
 
       {isPrimaryEnvironment ? <SourceControlWritingSettingsSection /> : null}
+
+      {isPrimaryEnvironment ? (
+        <SettingsSection title="Branches">
+          <SettingsRow
+            title="Branch prefix"
+            description="Prefix branch names created for new worktrees. Leave this empty to create branches without a prefix."
+            resetAction={
+              settings.branchPrefix !== undefined ? (
+                <SettingResetButton
+                  label="branch prefix"
+                  onClick={() => updateSettings({ branchPrefix: null })}
+                />
+              ) : null
+            }
+            control={
+              <Input
+                key={settings.branchPrefix ?? "t3code/"}
+                className="w-full sm:w-64"
+                aria-label="Branch prefix"
+                defaultValue={settings.branchPrefix ?? "t3code/"}
+                placeholder="t3code/"
+                onBlur={(event) => {
+                  if (event.currentTarget.value !== (settings.branchPrefix ?? "t3code/")) {
+                    updateSettings({ branchPrefix: event.currentTarget.value });
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                }}
+              />
+            }
+          />
+        </SettingsSection>
+      ) : null}
 
       {result.worktreeManagers.length > 0 ? (
         <SettingsSection title="Worktrees">

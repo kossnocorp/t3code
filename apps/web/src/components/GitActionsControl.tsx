@@ -1135,6 +1135,9 @@ export default function GitActionsControl({
     const branchUpdate = resolveLiveThreadBranchUpdate({
       threadBranch: activeDraftThread?.branch ?? null,
       gitStatus: gitStatusForActions,
+      ...(serverConfig?.settings.branchPrefix !== undefined
+        ? { branchPrefix: serverConfig.settings.branchPrefix }
+        : {}),
     });
     if (!branchUpdate) {
       return;
@@ -1148,6 +1151,7 @@ export default function GitActionsControl({
     isGitActionRunning,
     isSelectingWorktreeBase,
     persistThreadBranchSync,
+    serverConfig?.settings.branchPrefix,
   ]);
 
   const isDefaultRef = useMemo(() => {

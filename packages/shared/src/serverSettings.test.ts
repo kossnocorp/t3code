@@ -18,6 +18,14 @@ import {
 } from "./serverSettings.ts";
 
 describe("serverSettings helpers", () => {
+  it("sets, preserves, and resets the worktree branch prefix", () => {
+    const custom = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, { branchPrefix: "agent/" });
+    expect(custom.branchPrefix).toBe("agent/");
+    expect(applyServerSettingsPatch(custom, {}).branchPrefix).toBe("agent/");
+    expect(applyServerSettingsPatch(custom, { branchPrefix: "" }).branchPrefix).toBe("");
+    expect(applyServerSettingsPatch(custom, { branchPrefix: null }).branchPrefix).toBeUndefined();
+  });
+
   it("normalizes optional persisted strings", () => {
     expect(normalizePersistedServerSettingString(undefined)).toBeUndefined();
     expect(normalizePersistedServerSettingString("   ")).toBeUndefined();

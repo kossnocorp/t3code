@@ -705,6 +705,24 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
     }),
   );
 
+  it.effect("generates semantic worktree branch names with the configured prefix", () =>
+    Effect.gen(function* () {
+      const { manager } = yield* makeManager({
+        serverSettings: { branchPrefix: "agent/" },
+        textGeneration: {
+          generateBranchName: () => Effect.succeed({ branch: "Feature/Reconnect Spinner" }),
+        },
+      });
+
+      const branch = yield* manager.generateWorktreeBranchName({
+        cwd: "/tmp/project",
+        message: "Fix reconnect spinner",
+      });
+
+      expect(branch).toBe("agent/feature/reconnect-spinner");
+    }),
+  );
+
   it.effect("status includes PR metadata when branch already has an open PR", () =>
     Effect.gen(function* () {
       const repoDir = yield* makeTempDir("t3code-git-manager-");

@@ -283,14 +283,22 @@ describe("provider enabled defaults", () => {
 
 describe("ServerSettings worktree defaults", () => {
   it("defaults start-from-origin on for legacy configs", () => {
-    expect(decodeServerSettings({}).newWorktreesStartFromOrigin).toBe(true);
-    expect(decodeServerSettings({}).worktrunkEnabled).toBe(false);
+    const settings = decodeServerSettings({});
+    expect(settings.newWorktreesStartFromOrigin).toBe(true);
+    expect(settings.branchPrefix).toBeUndefined();
+    expect(settings.worktrunkEnabled).toBe(false);
   });
 
   it("accepts start-from-origin updates", () => {
     expect(
       decodeServerSettingsPatch({ newWorktreesStartFromOrigin: false }).newWorktreesStartFromOrigin,
     ).toBe(false);
+  });
+
+  it("preserves explicit empty branch prefixes", () => {
+    expect(decodeServerSettings({ branchPrefix: "" }).branchPrefix).toBe("");
+    expect(decodeServerSettingsPatch({ branchPrefix: "" }).branchPrefix).toBe("");
+    expect(decodeServerSettingsPatch({ branchPrefix: null }).branchPrefix).toBeNull();
   });
 });
 

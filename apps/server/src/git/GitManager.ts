@@ -1628,7 +1628,7 @@ export const make = Effect.gen(function* () {
         : {}),
       modelSelection,
     });
-    return buildGeneratedWorktreeBranchName(generated.branch);
+    return buildGeneratedWorktreeBranchName(generated.branch, settings.branchPrefix);
   });
 
   const runCommitStep = Effect.fn("runCommitStep")(function* (

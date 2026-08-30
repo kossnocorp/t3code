@@ -38,6 +38,7 @@ import {
   type ThreadOutboxCommandStage,
 } from "./thread-outbox-model";
 import { threadEnvironment } from "./threads";
+import { serverEnvironment } from "./server";
 import { useAtomCommand } from "./use-atom-command";
 import {
   editingQueuedMessageIdsAtom,
@@ -274,7 +275,11 @@ export function useThreadOutboxDrain(): void {
           branch: creation.branch,
           worktreePath: creation.worktreePath,
           startFromOrigin: creation.startFromOrigin ?? false,
-          worktreeBranchName: buildTemporaryWorktreeBranchName(randomHex),
+          worktreeBranchName: buildTemporaryWorktreeBranchName(
+            randomHex,
+            appAtomRegistry.get(serverEnvironment.settingsValueAtom(queuedMessage.environmentId))
+              ?.branchPrefix,
+          ),
         }),
       });
       return completeDelivery(deliveryResult);

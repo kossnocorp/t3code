@@ -132,6 +132,7 @@ export function applyServerSettingsPatch(
     providerHealthRefreshInterval,
     backgroundActivityProfile,
     backgroundActivity,
+    branchPrefix,
     ...patchForMerge
   } = patch;
   const currentBackgroundActivity = normalizeServerBackgroundActivitySettings(current);
@@ -169,7 +170,13 @@ export function applyServerSettingsPatch(
             },
           }
         : undefined;
-  const next = deepMerge(current, patchForMerge);
+  const merged = deepMerge(current, patchForMerge);
+  const next =
+    branchPrefix === null
+      ? (({ branchPrefix: _, ...settings }) => settings)(merged)
+      : branchPrefix === undefined
+        ? merged
+        : { ...merged, branchPrefix };
   const nextWithReplacementsBase = {
     ...next,
     ...(backgroundActivity !== undefined

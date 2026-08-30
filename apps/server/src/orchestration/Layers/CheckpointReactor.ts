@@ -8,6 +8,7 @@ import {
   TurnId,
   type OrchestrationEvent,
   type ProviderRuntimeEvent,
+  type ServerSettingsError,
   type VcsStatusLocalResult,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
@@ -38,6 +39,7 @@ import type { OrchestrationDispatchError } from "../Errors.ts";
 import { isGitRepository } from "../../git/Utils.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import * as WorkspaceEntries from "../../workspace/WorkspaceEntries.ts";
+import { ServerSettingsService } from "../../serverSettings.ts";
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
@@ -88,6 +90,7 @@ const make = Effect.gen(function* () {
   const receiptBus = yield* RuntimeReceiptBus;
   const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
+  const serverSettingsService = yield* ServerSettingsService;
 
   const appendRevertFailureActivity = (input: {
     readonly threadId: ThreadId;
@@ -571,9 +574,11 @@ const make = Effect.gen(function* () {
     // Detached HEAD has no branch to adopt; a temporary placeholder checkout
     // means the first-turn auto-rename is still in flight — don't race it.
     const checkedOutBranch = input.local.refName;
-    if (checkedOutBranch === null || isTemporaryWorktreeBranch(checkedOutBranch)) {
+    if (checkedOutBranch === null) {
       return;
     }
+    const { branchPrefix } = yield* serverSettingsService.getSettings;
+    if (isTemporaryWorktreeBranch(checkedOutBranch, branchPrefix)) return;
 
     yield* Effect.gen(function* () {
       const thread = yield* projectionSnapshotQuery
@@ -585,7 +590,7 @@ const make = Effect.gen(function* () {
         thread.branch === checkedOutBranch ||
         thread.worktreePath === null ||
         thread.worktreePath !== input.cwd ||
-        isTemporaryWorktreeBranch(thread.branch)
+        isTemporaryWorktreeBranch(thread.branch, branchPrefix)
       ) {
         return;
       }
@@ -891,7 +896,10 @@ const make = Effect.gen(function* () {
     input: ReactorInput,
   ): Effect.Effect<
     void,
-    CheckpointStoreError | OrchestrationDispatchError | PlatformError.PlatformError,
+    | CheckpointStoreError
+    | OrchestrationDispatchError
+    | PlatformError.PlatformError
+    | ServerSettingsError,
     never
   > =>
     input.source === "domain" ? processDomainEvent(input.event) : processRuntimeEvent(input.event);

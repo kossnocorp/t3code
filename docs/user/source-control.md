@@ -63,6 +63,11 @@ The **Source Control settings** page shows you exactly what's connected:
 
 Run a quick **Rescan** after setting up a new machine or changing credentials.
 
+### Choose a Branch Prefix
+
+New worktree branches use `t3code/` by default. Change **Settings → Source Control → Branches →
+Branch prefix** to use another prefix, or clear the field to create branches without one.
+
 ### Create Worktrees with Worktrunk
 
 If [Worktrunk](https://worktrunk.dev/) is installed on the machine running T3 Code, it appears under

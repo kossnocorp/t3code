@@ -20,6 +20,8 @@ import { buildProjectThreadStartTurnInput } from "../../lib/projectThreadStartTu
 import { randomHex } from "../../lib/uuid";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { setPendingConnectionError } from "../../state/use-remote-environment-registry";
+import { serverEnvironment } from "../../state/server";
+import { appAtomRegistry } from "../../state/atom-registry";
 import { validateProjectThreadCreation } from "./projectThreadCreationValidation";
 
 export function useCreateProjectThread() {
@@ -74,7 +76,11 @@ export function useCreateProjectThread() {
           branch: input.branch,
           worktreePath: input.worktreePath,
           startFromOrigin: input.startFromOrigin ?? false,
-          worktreeBranchName: buildTemporaryWorktreeBranchName(randomHex),
+          worktreeBranchName: buildTemporaryWorktreeBranchName(
+            randomHex,
+            appAtomRegistry.get(serverEnvironment.settingsValueAtom(input.project.environmentId))
+              ?.branchPrefix,
+          ),
         }),
       });
       if (AsyncResult.isFailure(result)) {

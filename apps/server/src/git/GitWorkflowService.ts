@@ -298,13 +298,16 @@ export const make = Effect.gen(function* () {
   const resolveWorktreeCreationBranch = Effect.fn(
     "GitWorkflowService.resolveWorktreeCreationBranch",
   )(function* (input: GitResolveWorktreeCreationBranchInput) {
-    if (!input.branch || !isTemporaryWorktreeBranch(input.branch)) {
+    if (!input.branch) {
       return input.branch;
     }
     const settings = yield* getServerSettingsForCommand(
       "GitWorkflowService.resolveWorktreeCreationBranch",
       input.cwd,
     );
+    if (!isTemporaryWorktreeBranch(input.branch, settings.branchPrefix)) {
+      return input.branch;
+    }
     if (!settings.worktrunkEnabled) {
       return input.branch;
     }

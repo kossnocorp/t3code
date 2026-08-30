@@ -817,7 +817,8 @@ const make = Effect.gen(function* () {
     if (!input.branch || !input.worktreePath) {
       return;
     }
-    if (!isTemporaryWorktreeBranch(input.branch)) {
+    const settings = yield* serverSettingsService.getSettings;
+    if (!isTemporaryWorktreeBranch(input.branch, settings.branchPrefix)) {
       return;
     }
 
