@@ -568,6 +568,7 @@ export interface ChatComposerProps {
   isServerThread: boolean;
   isLocalDraftThread: boolean;
   forceExpandedOnMobile: boolean;
+  fillAvailableHeight: boolean;
   projectSelectionRequired: boolean;
 
   // Session phase
@@ -684,6 +685,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     isServerThread: _isServerThread,
     isLocalDraftThread: _isLocalDraftThread,
     forceExpandedOnMobile,
+    fillAvailableHeight,
     projectSelectionRequired,
     phase,
     isConnecting,
@@ -2969,7 +2971,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       onDragOverCapture={composerMentionDragHandlers.onDragOver}
       onDragLeaveCapture={onComposerMentionDragLeaveCapture}
       onDropCapture={composerMentionDragHandlers.onDrop}
-      className={cn("mx-auto w-full min-w-0 max-w-3xl", hasShoulderTab && "pt-7")}
+      className={cn(
+        "mx-auto w-full min-w-0 max-w-3xl",
+        hasShoulderTab && "pt-7",
+        fillAvailableHeight && "flex h-full min-h-0 flex-col",
+      )}
       data-chat-composer-form="true"
     >
       {showComposerTopDrawer && (!isTasksDrawerOpen || hasBlockingComposerTopDrawer) ? (
@@ -3096,7 +3102,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           steps={visibleTaskSteps}
         />
       ) : null}
-      <div className="relative">
+      <div className={cn("relative", fillAvailableHeight && "flex min-h-0 flex-1 flex-col")}>
         {showShoulderTabs && visibleTasksProgress && visibleTaskSteps ? (
           <ComposerTasksBadge
             expanded={false}
@@ -3121,6 +3127,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           className={cn(
             "group relative z-10 rounded-[22px] p-px transition-colors duration-200",
             composerProviderState.composerFrameClassName,
+            fillAvailableHeight && "flex min-h-0 flex-1 flex-col",
           )}
         >
           <div
@@ -3132,6 +3139,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               isDragOverComposer ? "bg-accent/45 ring-1 ring-primary/70" : null,
               projectSelectionRequired ? "opacity-75" : null,
               composerProviderState.composerSurfaceClassName,
+              fillAvailableHeight && "flex min-h-0 flex-1 flex-col",
             )}
           >
             {showCollapsedMobilePromptRow ? (
@@ -3187,6 +3195,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 "pt-3.5 sm:pt-4",
                 isComposerApprovalState && "pb-3 sm:pb-4",
                 isComposerCollapsedMobile && "hidden",
+                fillAvailableHeight && "flex min-h-0 flex-1 flex-col",
               )}
             >
               {isStashMenuOpen && !composerMenuOpen && !isComposerApprovalState && (
@@ -3383,7 +3392,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   </div>
                 )}
 
-              <div className="relative">
+              <div className={cn("relative", fillAvailableHeight && "flex min-h-17.5 flex-1")}>
                 <ComposerPromptEditor
                   editorRef={composerEditorRef}
                   value={
@@ -3400,7 +3409,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       : []
                   }
                   skills={selectedProviderStatus?.skills ?? []}
-                  {...(showMobilePendingAnswerActions ? { className: "max-sm:pb-11" } : {})}
+                  className={cn(
+                    showMobilePendingAnswerActions && "max-sm:pb-11",
+                    fillAvailableHeight && "h-full max-h-none min-h-0",
+                  )}
+                  {...(fillAvailableHeight ? { containerClassName: "h-full min-h-0 w-full" } : {})}
                   onRemoveTerminalContext={removeComposerTerminalContextFromDraft}
                   onChange={onPromptChange}
                   onCommandKeyDown={onComposerCommandKey}

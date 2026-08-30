@@ -885,6 +885,7 @@ interface ComposerPromptEditorProps {
   disabled: boolean;
   placeholder: string;
   className?: string;
+  containerClassName?: string;
   onRemoveTerminalContext: (contextId: string) => void;
   onChange: (
     nextValue: string,
@@ -1534,6 +1535,7 @@ function ComposerPromptEditorInner({
   disabled,
   placeholder,
   className,
+  containerClassName,
   onRemoveTerminalContext,
   onChange,
   onCommandKeyDown,
@@ -1748,7 +1750,12 @@ function ComposerPromptEditorInner({
 
   return (
     <ComposerTerminalContextActionsContext value={terminalContextActions}>
-      <div className="relative [font-family:var(--font-composer,var(--font-sans))] [font-size:var(--font-size-prompt,0.875rem)] [@media(max-width:39.999rem)_and_(pointer:coarse)]:[font-size:max(var(--font-size-prompt,1rem),16px)]">
+      <div
+        className={cn(
+          "relative [font-family:var(--font-composer,var(--font-sans))] [font-size:var(--font-size-prompt,0.875rem)] [@media(max-width:39.999rem)_and_(pointer:coarse)]:[font-size:max(var(--font-size-prompt,1rem),16px)]",
+          containerClassName,
+        )}
+      >
         <PlainTextPlugin
           contentEditable={
             <ContentEditable
@@ -1795,6 +1802,7 @@ export function ComposerPromptEditor({
   disabled,
   placeholder,
   className,
+  containerClassName,
   onRemoveTerminalContext,
   onChange,
   onCommandKeyDown,
@@ -1838,6 +1846,7 @@ export function ComposerPromptEditor({
         editorRef={editorRef}
         {...(onCommandKeyDown ? { onCommandKeyDown } : {})}
         {...(className ? { className } : {})}
+        {...(containerClassName ? { containerClassName } : {})}
       />
     </LexicalComposer>
   );

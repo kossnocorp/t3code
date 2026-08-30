@@ -284,7 +284,11 @@ import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
 import { resolveTimelineIsAtEnd } from "./chat/MessagesTimeline.logic";
 import { ChatHeader } from "./chat/ChatHeader";
-import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
+import {
+  DraftComposerExpandControl,
+  PanelLayoutControls,
+  RightPanelMaximizeControl,
+} from "./chat/PanelLayoutControls";
 import { type ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { NoActiveThreadState } from "./NoActiveThreadState";
 import { WorkspacePageHeader } from "./WorkspacePageHeader";
@@ -405,6 +409,7 @@ const EMPTY_ACTIVITIES: OrchestrationThreadActivity[] = [];
 const EMPTY_PROVIDERS: ServerProvider[] = [];
 const EMPTY_PROVIDER_SKILLS: ServerProvider["skills"] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
+const NEW_THREAD_PROMPT_EXPANDED_KEY = "t3code:new-thread-prompt-expanded";
 function useDraftHeroLayoutTransition(isDraftHeroState: boolean) {
   const transitionGroupRef = useRef<HTMLDivElement | null>(null);
   const composerAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -1441,6 +1446,11 @@ function ChatViewContent(props: ChatViewProps) {
   const [isRevertingCheckpoint, setIsRevertingCheckpoint] = useState(false);
   const [maximizedRightPanelThreadKey, setMaximizedRightPanelThreadKey] = useState<string | null>(
     null,
+  );
+  const [newThreadPromptExpanded, setNewThreadPromptExpanded] = useLocalStorage(
+    NEW_THREAD_PROMPT_EXPANDED_KEY,
+    false,
+    Schema.Boolean,
   );
   const [respondingRequestIds, setRespondingRequestIds] = useState<ApprovalRequestId[]>([]);
   const [respondingUserInputRequestIds, setRespondingUserInputRequestIds] = useState<
@@ -2704,6 +2714,7 @@ function ChatViewContent(props: ChatViewProps) {
     draftHeroDockRequested,
     backgroundSubmissionPending,
   });
+  const draftComposerExpanded = isDraftHeroState && newThreadPromptExpanded;
   const [
     attachDraftHeroTransitionGroupRef,
     attachDraftHeroComposerAnchorRef,
@@ -6969,19 +6980,34 @@ function ChatViewContent(props: ChatViewProps) {
             <div
               ref={setComposerOverlayElement}
               data-chat-composer-overlay="true"
-              className={
+              className={cn(
+                "pointer-events-none absolute z-20",
                 isDraftHeroState
-                  ? "pointer-events-none absolute inset-0 z-20 flex items-center"
-                  : "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2"
-              }
+                  ? "inset-0 flex items-center"
+                  : "inset-x-0 bottom-0 pt-1.5 sm:pt-2",
+                draftComposerExpanded && "items-stretch py-12",
+              )}
             >
               <div
                 ref={attachDraftHeroTransitionGroupRef}
-                className="w-full ps-[calc(env(safe-area-inset-left)+0.75rem)] pe-[calc(env(safe-area-inset-right)+0.75rem)] sm:ps-[calc(env(safe-area-inset-left)+1.25rem)] sm:pe-[calc(env(safe-area-inset-right)+1.25rem)]"
+                className={cn(
+                  "w-full ps-[calc(env(safe-area-inset-left)+0.75rem)] pe-[calc(env(safe-area-inset-right)+0.75rem)] sm:ps-[calc(env(safe-area-inset-left)+1.25rem)] sm:pe-[calc(env(safe-area-inset-right)+1.25rem)]",
+                  draftComposerExpanded && "h-full",
+                )}
               >
-                <div className="pointer-events-auto relative z-10">
+                <div
+                  className={cn(
+                    "pointer-events-auto relative z-10",
+                    draftComposerExpanded && "flex h-full min-h-0 flex-col",
+                  )}
+                >
                   {isDraftHeroState ? (
-                    <div className="absolute inset-x-0 bottom-full z-0">
+                    <div
+                      className={cn(
+                        "inset-x-0 z-0",
+                        draftComposerExpanded ? "relative shrink-0" : "absolute bottom-full",
+                      )}
+                    >
                       <div
                         className="pb-8"
                         style={
@@ -7006,7 +7032,7 @@ function ChatViewContent(props: ChatViewProps) {
                     <ThreadSyncStatusPill phase={threadSyncPhase} />
                   ) : null}
                   <div
-                    className="relative"
+                    className={cn("relative", draftComposerExpanded && "min-h-0 flex-1")}
                     style={
                       forceExpandedMobileComposer
                         ? { viewTransitionName: MOBILE_COMPOSER_VIEW_TRANSITION_NAME }
@@ -7018,10 +7044,27 @@ function ChatViewContent(props: ChatViewProps) {
                         "chat-composer-glass-shell relative mx-auto w-full max-w-3xl",
                         externalComposerDrawerAttached && "chat-composer-glass-shell-attached",
                         showComposerContextStrip && "chat-composer-glass-shell-with-context",
+                        draftComposerExpanded && "flex h-full min-h-0 flex-col",
                       )}
                     >
-                      <div className="chat-composer-glass-host relative z-10 w-full rounded-[22px]">
-                        <div ref={attachDraftHeroComposerAnchorRef} className="relative z-10">
+                      {isDraftHeroState ? (
+                        <div className="absolute right-0 bottom-full z-20 mb-1">
+                          <DraftComposerExpandControl
+                            expanded={draftComposerExpanded}
+                            onToggle={() => setNewThreadPromptExpanded((expanded) => !expanded)}
+                          />
+                        </div>
+                      ) : null}
+                      <div
+                        className={cn(
+                          "chat-composer-glass-host relative z-10 w-full rounded-[22px]",
+                          draftComposerExpanded && "min-h-0 flex-1",
+                        )}
+                      >
+                        <div
+                          ref={attachDraftHeroComposerAnchorRef}
+                          className={cn("relative z-10", draftComposerExpanded && "h-full")}
+                        >
                           <ChatComposer
                             composerRef={composerRef}
                             composerDraftTarget={composerDraftTarget}
@@ -7037,6 +7080,7 @@ function ChatViewContent(props: ChatViewProps) {
                             isServerThread={isServerThread}
                             isLocalDraftThread={isLocalDraftThread}
                             forceExpandedOnMobile={forceExpandedMobileComposer && isDraftHeroState}
+                            fillAvailableHeight={draftComposerExpanded}
                             projectSelectionRequired={isLocalDraftThread && activeProject === null}
                             phase={phase}
                             isConnecting={isConnecting}
@@ -7148,10 +7192,12 @@ function ChatViewContent(props: ChatViewProps) {
                         </div>
                       </div>
                     </div>
-                    <div
-                      aria-hidden
-                      className="h-[calc(env(safe-area-inset-bottom)+1rem)] sm:h-[calc(env(safe-area-inset-bottom)+1.25rem)]"
-                    />
+                    {draftComposerExpanded ? null : (
+                      <div
+                        aria-hidden
+                        className="h-[calc(env(safe-area-inset-bottom)+1rem)] sm:h-[calc(env(safe-area-inset-bottom)+1.25rem)]"
+                      />
+                    )}
                   </div>
                 </div>
               </div>
