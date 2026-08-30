@@ -27,12 +27,18 @@ import {
   type VcsStatusRemoteResult,
   type VcsStatusResult,
 } from "@t3tools/contracts";
+import { isTemporaryWorktreeBranch } from "@t3tools/shared/git";
 
 import * as GitManager from "./GitManager.ts";
 import * as Worktrunk from "./Worktrunk.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import * as ServerSettingsService from "../serverSettings.ts";
+
+export interface GitResolveWorktreeCreationBranchInput
+  extends GitManager.GitGenerateWorktreeBranchNameInput {
+  readonly branch: string | undefined;
+}
 
 export class GitWorkflowService extends Context.Service<
   GitWorkflowService,
@@ -100,6 +106,12 @@ export class GitWorkflowService extends Context.Service<
       readonly oldBranch: string;
       readonly newBranch: string;
     }) => Effect.Effect<{ readonly branch: string }, GitManagerServiceError>;
+    readonly generateWorktreeBranchName: (
+      input: GitManager.GitGenerateWorktreeBranchNameInput,
+    ) => Effect.Effect<string, GitManagerServiceError>;
+    readonly resolveWorktreeCreationBranch: (
+      input: GitResolveWorktreeCreationBranchInput,
+    ) => Effect.Effect<string | undefined, GitManagerServiceError>;
   }
 >()("t3/git/GitWorkflowService") {}
 
@@ -278,6 +290,31 @@ export const make = Effect.gen(function* () {
     (input: Input) =>
       ensureGit(operation, input.cwd).pipe(Effect.andThen(run(input)));
 
+  const generateWorktreeBranchName = routeGitManager(
+    "GitWorkflowService.generateWorktreeBranchName",
+    gitManager.generateWorktreeBranchName,
+  );
+
+  const resolveWorktreeCreationBranch = Effect.fn(
+    "GitWorkflowService.resolveWorktreeCreationBranch",
+  )(function* (input: GitResolveWorktreeCreationBranchInput) {
+    if (!input.branch || !isTemporaryWorktreeBranch(input.branch)) {
+      return input.branch;
+    }
+    const settings = yield* getServerSettingsForCommand(
+      "GitWorkflowService.resolveWorktreeCreationBranch",
+      input.cwd,
+    );
+    if (!settings.worktrunkEnabled) {
+      return input.branch;
+    }
+    return yield* generateWorktreeBranchName({
+      cwd: input.cwd,
+      message: input.message,
+      ...(input.attachments ? { attachments: input.attachments } : {}),
+    });
+  });
+
   return GitWorkflowService.of({
     status: (input) =>
       detectGitRepositoryForStatus("GitWorkflowService.status", input.cwd).pipe(
@@ -366,6 +403,8 @@ export const make = Effect.gen(function* () {
       ensureGit("GitWorkflowService.renameBranch", input.cwd).pipe(
         Effect.andThen(git.renameBranch(input)),
       ),
+    generateWorktreeBranchName,
+    resolveWorktreeCreationBranch,
   });
 });
 

@@ -28,11 +28,13 @@ import {
   type VcsStatusLocalResult,
   type VcsStatusRemoteResult,
   VcsStatusResult,
+  type ChatAttachment,
   ModelSelection,
   SourceControlProviderError,
   type SourceControlWritingStyleSettings,
 } from "@t3tools/contracts";
 import {
+  buildGeneratedWorktreeBranchName,
   detectSourceControlProviderFromGitRemoteUrl,
   mergeGitStatusParts,
   normalizeGitRemoteUrl,
@@ -72,6 +74,12 @@ export interface GitRunStackedActionOptions {
   readonly progressReporter?: GitActionProgressReporter;
 }
 
+export interface GitGenerateWorktreeBranchNameInput {
+  readonly cwd: string;
+  readonly message: string;
+  readonly attachments?: ReadonlyArray<ChatAttachment>;
+}
+
 interface SourceControlTextGenerationSettings {
   readonly modelSelection: ModelSelection;
   readonly style: SourceControlWritingStyleSettings;
@@ -103,6 +111,9 @@ export class GitManager extends Context.Service<
       input: GitRunStackedActionInput,
       options?: GitRunStackedActionOptions,
     ) => Effect.Effect<GitRunStackedActionResult, GitManagerServiceError>;
+    readonly generateWorktreeBranchName: (
+      input: GitGenerateWorktreeBranchNameInput,
+    ) => Effect.Effect<string, GitManagerServiceError>;
   }
 >()("t3/git/GitManager") {}
 
@@ -1588,6 +1599,38 @@ export const make = Effect.gen(function* () {
     },
   );
 
+  const generateWorktreeBranchName = Effect.fn("GitManager.generateWorktreeBranchName")(function* (
+    input: GitGenerateWorktreeBranchNameInput,
+  ) {
+    const settings = yield* serverSettingsService.getSettings.pipe(
+      Effect.mapError(
+        (cause) =>
+          new GitManagerError({
+            operation: "generateWorktreeBranchName",
+            cwd: input.cwd,
+            detail: "Failed to get server settings.",
+            cause,
+          }),
+      ),
+    );
+    const modelSelection =
+      settings.sourceControlWriterModelSelection === null
+        ? settings.textGenerationModelSelection
+        : ServerSettings.resolveSourceControlWriterModelSelection(
+            settings,
+            yield* providerRegistry.getProviders,
+          );
+    const generated = yield* textGeneration.generateBranchName({
+      cwd: input.cwd,
+      message: input.message,
+      ...(input.attachments && input.attachments.length > 0
+        ? { attachments: input.attachments }
+        : {}),
+      modelSelection,
+    });
+    return buildGeneratedWorktreeBranchName(generated.branch);
+  });
+
   const runCommitStep = Effect.fn("runCommitStep")(function* (
     settings: SourceControlTextGenerationSettings,
     cwd: string,
@@ -2393,6 +2436,7 @@ export const make = Effect.gen(function* () {
     resolvePullRequest,
     preparePullRequestThread,
     runStackedAction,
+    generateWorktreeBranchName,
   });
 });
 

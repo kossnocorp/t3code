@@ -3,12 +3,21 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   applyGitStatusStreamEvent,
+  buildGeneratedWorktreeBranchName,
   buildTemporaryWorktreeBranchName,
   isTemporaryWorktreeBranch,
   normalizeGitRemoteUrl,
   parseGitHubRepositoryNameWithOwnerFromRemoteUrl,
   WORKTREE_BRANCH_PREFIX,
 } from "./git.ts";
+
+describe("buildGeneratedWorktreeBranchName", () => {
+  it("normalizes generated branch names under the T3 Code prefix", () => {
+    expect(buildGeneratedWorktreeBranchName("refs/heads/Feature/Reconnect Spinner")).toBe(
+      "t3code/feature/reconnect-spinner",
+    );
+  });
+});
 
 describe("normalizeGitRemoteUrl", () => {
   it("canonicalizes equivalent GitHub remotes across protocol variants", () => {

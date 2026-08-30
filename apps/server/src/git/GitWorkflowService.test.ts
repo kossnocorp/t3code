@@ -2,7 +2,7 @@ import { assert, describe, expect, it, vi } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
-import { VcsRepositoryDetectionError } from "@t3tools/contracts";
+import { DEFAULT_SERVER_SETTINGS, VcsRepositoryDetectionError } from "@t3tools/contracts";
 
 import * as GitManager from "./GitManager.ts";
 import * as GitWorkflowService from "./GitWorkflowService.ts";
@@ -13,21 +13,115 @@ import * as ServerSettingsService from "../serverSettings.ts";
 
 function makeLayer(input: {
   readonly detect: VcsDriverRegistry.VcsDriverRegistry["Service"]["detect"];
+  readonly resolve?: VcsDriverRegistry.VcsDriverRegistry["Service"]["resolve"];
+  readonly serverSettings?: Partial<ServerSettingsService.ServerSettingsService["Service"]>;
+  readonly gitManager?: Partial<GitManager.GitManager["Service"]>;
 }) {
   return GitWorkflowService.layer.pipe(
-    Layer.provide(Layer.mock(ServerSettingsService.ServerSettingsService)({})),
+    Layer.provide(
+      Layer.mock(ServerSettingsService.ServerSettingsService)({
+        ...input.serverSettings,
+      }),
+    ),
     Layer.provide(
       Layer.mock(VcsDriverRegistry.VcsDriverRegistry)({
         detect: input.detect,
+        ...(input.resolve ? { resolve: input.resolve } : {}),
       }),
     ),
     Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
-    Layer.provide(Layer.mock(GitManager.GitManager)({})),
+    Layer.provide(Layer.mock(GitManager.GitManager)({ ...input.gitManager })),
     Layer.provide(Layer.mock(Worktrunk.Worktrunk)({})),
   );
 }
 
 describe("GitWorkflowService", () => {
+  it.effect("generates a semantic creation branch for temporary Worktrunk branches", () => {
+    const generateWorktreeBranchName = vi.fn(() => Effect.succeed("t3code/reconnect-spinner"));
+
+    return Effect.gen(function* () {
+      const workflow = yield* GitWorkflowService.GitWorkflowService;
+      const branch = yield* workflow.resolveWorktreeCreationBranch({
+        cwd: "/repo",
+        branch: "t3code/deadbeef",
+        message: "Fix the reconnect spinner",
+      });
+
+      assert.equal(branch, "t3code/reconnect-spinner");
+      expect(generateWorktreeBranchName).toHaveBeenCalledWith({
+        cwd: "/repo",
+        message: "Fix the reconnect spinner",
+      });
+    }).pipe(
+      Effect.provide(
+        makeLayer({
+          detect: () => Effect.succeed(null),
+          resolve: () => Effect.succeed({ kind: "git" } as VcsDriverRegistry.VcsDriverHandle),
+          serverSettings: {
+            getSettings: Effect.succeed({
+              ...DEFAULT_SERVER_SETTINGS,
+              worktrunkEnabled: true,
+            }),
+          },
+          gitManager: { generateWorktreeBranchName },
+        }),
+      ),
+    );
+  });
+
+  it.effect("keeps temporary creation branches when Worktrunk is disabled", () =>
+    Effect.gen(function* () {
+      const workflow = yield* GitWorkflowService.GitWorkflowService;
+      const branch = yield* workflow.resolveWorktreeCreationBranch({
+        cwd: "/repo",
+        branch: "t3code/deadbeef",
+        message: "Fix the reconnect spinner",
+      });
+
+      assert.equal(branch, "t3code/deadbeef");
+    }).pipe(
+      Effect.provide(
+        makeLayer({
+          detect: () => Effect.succeed(null),
+          serverSettings: {
+            getSettings: Effect.succeed({
+              ...DEFAULT_SERVER_SETTINGS,
+              worktrunkEnabled: false,
+            }),
+          },
+        }),
+      ),
+    ),
+  );
+
+  it.effect("keeps semantic creation branches without reading Worktrunk settings", () => {
+    let settingsReads = 0;
+
+    return Effect.gen(function* () {
+      const workflow = yield* GitWorkflowService.GitWorkflowService;
+      const branch = yield* workflow.resolveWorktreeCreationBranch({
+        cwd: "/repo",
+        branch: "t3code/reconnect-spinner",
+        message: "Fix the reconnect spinner",
+      });
+
+      assert.equal(branch, "t3code/reconnect-spinner");
+      assert.equal(settingsReads, 0);
+    }).pipe(
+      Effect.provide(
+        makeLayer({
+          detect: () => Effect.succeed(null),
+          serverSettings: {
+            getSettings: Effect.sync(() => {
+              settingsReads += 1;
+              return DEFAULT_SERVER_SETTINGS;
+            }),
+          },
+        }),
+      ),
+    );
+  });
+
   it.effect("returns an empty local status when no VCS repository is detected", () =>
     Effect.gen(function* () {
       const workflow = yield* GitWorkflowService.GitWorkflowService;

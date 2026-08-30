@@ -679,6 +679,32 @@ const GitManagerTestLayer = GitVcsDriver.layer.pipe(
 );
 
 it.layer(GitManagerTestLayer)("GitManager", (it) => {
+  it.effect("generates a normalized semantic worktree branch name", () =>
+    Effect.gen(function* () {
+      let generationInput: TextGeneration.BranchNameGenerationInput | undefined;
+      const { manager } = yield* makeManager({
+        textGeneration: {
+          generateBranchName: (input) =>
+            Effect.sync(() => {
+              generationInput = input;
+              return { branch: "Feature/Reconnect Spinner" };
+            }),
+        },
+      });
+
+      const branch = yield* manager.generateWorktreeBranchName({
+        cwd: "/tmp/project",
+        message: "Fix reconnect spinner",
+      });
+
+      expect(branch).toBe("t3code/feature/reconnect-spinner");
+      expect(generationInput).toMatchObject({
+        cwd: "/tmp/project",
+        message: "Fix reconnect spinner",
+      });
+    }),
+  );
+
   it.effect("status includes PR metadata when branch already has an open PR", () =>
     Effect.gen(function* () {
       const repoDir = yield* makeTempDir("t3code-git-manager-");

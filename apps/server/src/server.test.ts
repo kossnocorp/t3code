@@ -7661,6 +7661,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               resolveRemoteTrackingCommit,
               createWorktree,
             },
+            serverSettings: {
+              getSettings: Effect.succeed(DEFAULT_SERVER_SETTINGS),
+            },
             vcsStatusBroadcaster: {
               refreshStatus,
             },
@@ -7774,6 +7777,138 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           assert.equal(finalCommand.bootstrap, undefined);
         }
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("generates a semantic branch before creating a Worktrunk worktree", () =>
+    Effect.gen(function* () {
+      const temporaryBranch = "t3code/deadbeef";
+      const generatedBranch = "t3code/reconnect-spinner";
+      const operations: string[] = [];
+      const dispatchedCommands: Array<OrchestrationCommand> = [];
+      let generationInput: unknown;
+      const generateWorktreeBranchName = vi.fn(
+        (input: GitManager.GitGenerateWorktreeBranchNameInput) =>
+          Effect.sync(() => {
+            generationInput = input;
+            operations.push("generate-branch");
+            return generatedBranch;
+          }),
+      );
+      const createWorktree = vi.fn(
+        (_: Parameters<Worktrunk.Worktrunk["Service"]["createWorktree"]>[0]) =>
+          Effect.sync(() => {
+            operations.push("create-worktree");
+            return {
+              worktree: {
+                refName: generatedBranch,
+                path: "/tmp/project.reconnect-spinner",
+              },
+            };
+          }),
+      );
+
+      yield* buildAppUnderTest({
+        layers: {
+          worktrunk: { createWorktree },
+          serverSettings: {
+            getSettings: Effect.succeed({
+              ...DEFAULT_SERVER_SETTINGS,
+              worktrunkEnabled: true,
+            }),
+          },
+          gitManager: { generateWorktreeBranchName },
+          vcsStatusBroadcaster: {
+            refreshStatus: () =>
+              Effect.succeed({
+                isRepo: true,
+                hasPrimaryRemote: true,
+                isDefaultRef: false,
+                refName: generatedBranch,
+                hasWorkingTreeChanges: false,
+                workingTree: {
+                  files: [],
+                  insertions: 0,
+                  deletions: 0,
+                },
+                hasUpstream: false,
+                aheadCount: 0,
+                behindCount: 0,
+                pr: null,
+              }),
+          },
+          orchestrationEngine: {
+            dispatch: (command) =>
+              Effect.sync(() => {
+                dispatchedCommands.push(command);
+                return { sequence: dispatchedCommands.length };
+              }),
+            readEvents: () => Stream.empty,
+          },
+        },
+      });
+
+      const createdAt = "2026-01-01T00:00:00.000Z";
+      const wsUrl = yield* getWsServerUrl("/ws");
+      yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+            type: "thread.turn.start",
+            commandId: CommandId.make("cmd-bootstrap-worktrunk-turn-start"),
+            threadId: ThreadId.make("thread-bootstrap-worktrunk"),
+            message: {
+              messageId: MessageId.make("msg-bootstrap-worktrunk"),
+              role: "user",
+              text: "Fix the reconnect spinner",
+              attachments: [],
+            },
+            modelSelection: defaultModelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            bootstrap: {
+              createThread: {
+                projectId: defaultProjectId,
+                title: "Bootstrap Thread",
+                modelSelection: defaultModelSelection,
+                runtimeMode: "full-access",
+                interactionMode: "default",
+                branch: "main",
+                worktreePath: null,
+                createdAt,
+              },
+              prepareWorktree: {
+                projectCwd: "/tmp/project",
+                baseBranch: "main",
+                branch: temporaryBranch,
+              },
+            },
+            createdAt,
+          }),
+        ),
+      );
+
+      assert.deepEqual(operations, ["generate-branch", "create-worktree"]);
+      assert.deepEqual(generationInput, {
+        cwd: "/tmp/project",
+        message: "Fix the reconnect spinner",
+      });
+      assert.deepEqual(createWorktree.mock.calls[0]?.[0], {
+        cwd: "/tmp/project",
+        refName: "main",
+        newRefName: generatedBranch,
+        baseRefName: "main",
+        path: null,
+      });
+      assert.deepEqual(
+        dispatchedCommands.map((command) => command.type),
+        ["thread.create", "thread.meta.update", "thread.turn.start"],
+      );
+      const metadataCommand = dispatchedCommands[1];
+      assertTrue(metadataCommand?.type === "thread.meta.update");
+      if (metadataCommand?.type === "thread.meta.update") {
+        assert.equal(metadataCommand.branch, generatedBranch);
+        assert.equal(metadataCommand.worktreePath, "/tmp/project.reconnect-spinner");
+      }
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
   it.effect(

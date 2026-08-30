@@ -11,6 +11,7 @@ import {
   ProviderInstanceId,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
+import { buildGeneratedWorktreeBranchName } from "@t3tools/shared/git";
 import {
   ApprovalRequestId,
   CommandId,
@@ -309,6 +310,19 @@ describe("ProviderCommandReactor", () => {
         }),
       ),
     );
+    const generateWorktreeBranchName = vi.fn(
+      (
+        input: Parameters<
+          GitWorkflowService.GitWorkflowService["Service"]["generateWorktreeBranchName"]
+        >[0],
+      ) =>
+        generateBranchName({
+          cwd: input.cwd,
+          message: input.message,
+          ...(input.attachments ? { attachments: input.attachments } : {}),
+          modelSelection,
+        }).pipe(Effect.map((generated) => buildGeneratedWorktreeBranchName(generated.branch))),
+    );
     const providerSnapshots = [
       {
         instanceId: modelSelection.instanceId,
@@ -409,6 +423,7 @@ describe("ProviderCommandReactor", () => {
           renameBranch,
           pruneWorktrees,
           createWorktree,
+          generateWorktreeBranchName,
         } satisfies Partial<GitWorkflowService.GitWorkflowService["Service"]>),
       ),
       Layer.provideMerge(
